@@ -93,8 +93,8 @@ window.UI = (function () {
     return `<span class="badge ${cls || "muted"}">${esc(text)}</span>`;
   }
   function actionBadge(a) {
-    const map = { reject: "danger", review: "warning", alert: "info", pass: "success" };
-    const label = { reject: "拒绝", review: "复核", alert: "告警", pass: "放行" };
+    const map = { reject: "danger", review: "warning", alert: "info", pass: "success", mark: "info" };
+    const label = { reject: "拒绝", review: "复核", alert: "告警", pass: "放行", mark: "标记" };
     return `<span class="badge ${map[a] || "muted"}">${label[a] || esc(a)}</span>`;
   }
   function levelBadge(lv) {
@@ -136,6 +136,8 @@ window.App = (function () {
     ["flows.html", "🔀", "决策流设计"],
     ["events.html", "⚡", "实时事件流"],
     ["alerts.html", "🔔", "告警列表"],
+    ["lists.html", "📋", "名单管理"],
+    ["list_hits.html", "🧾", "名单命中流水"],
     ["stats.html", "📈", "统计报表"],
     ["versions.html", "🕘", "规则版本管理"],
     ["sandbox.html", "🧪", "测试沙箱"],

@@ -9,6 +9,8 @@ from flask_sock import Sock
 from backend import config, auth, runtime
 from backend.engine.engine import RiskEngine
 from backend.flows import FlowStore
+from backend.list_store import ListStore
+from backend.list_hit_store import ListHitStore
 from backend.settings_store import get_settings
 
 # 全局 socket 实例（供 app.py 与测试使用）
@@ -25,7 +27,14 @@ def create_app():
     auth.ensure_default_users()
 
     # 运行时单例
-    engine = RiskEngine(settings=get_settings())
+    settings = get_settings()
+    list_store = ListStore()
+    list_cfg = settings.get("list", {})
+    list_hit_store = ListHitStore(
+        max_keep=list_cfg.get("max_hit_keep", 20000),
+        max_query_days=list_cfg.get("hit_query_max_days", 31))
+    engine = RiskEngine(settings=settings, list_store=list_store,
+                        list_hit_store=list_hit_store)
     flows = FlowStore()
     runtime.init(engine, flows)
 
@@ -35,8 +44,10 @@ def create_app():
 
     # ---- 注册 API 蓝图 ----
     from backend.api import (rules, events, alerts, stats, users,
-                             settings, sandbox, dict as dict_api, flows as flows_api)
-    for module in (rules, events, alerts, stats, users, settings, sandbox, dict_api, flows_api):
+                             settings, sandbox, dict as dict_api, flows as flows_api,
+                             lists, list_hits)
+    for module in (rules, events, alerts, stats, users, settings, sandbox, dict_api,
+                   flows_api, lists, list_hits):
         app.register_blueprint(module.bp)
 
     # ---- 认证 ----

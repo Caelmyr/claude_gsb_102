@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>名单命中流水 · 风控引擎</title>
+<link rel="stylesheet" href="assets/css/style.css">
+<script src="assets/js/api.js"></script>
+</head>
+<body>
+<div id="app"></div>
+<script>
+let page = 1;
+const PAGE_SIZE = 20;
+let rows = [];
+
+function typeBadge(t) {
+  return t === "black"
+    ? '<span class="badge danger">黑名单</span>'
+    : '<span class="badge success">白名单</span>';
+}
+
+function subjectText(s) {
+  if (!s) return "-";
+  const parts = Object.entries(s).filter(([k, v]) => v != null).map(([k, v]) => `${k}=${v}`);
+  return parts.length ? parts.join(" ") : "-";
+}
+
+function currentFilters() {
+  const f = {
+    list_type: document.getElementById("f-type").value,
+    action: document.getElementById("f-action").value,
+    entry_id: document.getElementById("f-entry").value.trim(),
+    subject: document.getElementById("f-subject").value.trim(),
+  };
+  const start = document.getElementById("f-start").value;
+  const end = document.getElementById("f-end").value;
+  if (start) f.start = (new Date(start).getTime() / 1000).toFixed(0);
+  if (end) f.end = (new Date(end).getTime() / 1000).toFixed(0);
+  return f;
+}
+
+async function load() {
+  const q = new URLSearchParams({ page, page_size: PAGE_SIZE, ...currentFilters() });
+  const r = await API.get("/api/list_hits?" + q.toString());
+  rows = r.hits;
+  const tbody = document.getElementById("hit-body");
+  tbody.innerHTML = rows.map((h, i) => `
+    <tr>
+      <td class="mono">${UI.fmtTime(h.ts)}</td>
+      <td>${typeBadge(h.list_type)}</td>
+      <td class="mono">${UI.esc(h.entry_field)}=<b>${UI.esc(h.entry_value)}</b></td>
+      <td class="mono">${UI.esc(subjectText(h.subject))}</td>
+      <td>${UI.actionBadge(h.action)}</td>
+      <td class="num">${h.risk_score}</td>
+      <td>${UI.esc((h.event_summary && h.event_summary.type) || "-")}</td>
+      <td class="mono">${UI.esc((h.event_summary && h.event_summary.id) || "-")}</td>
+      <td class="text-right"><button class="btn sm" onclick="detail(${i})">详情</button></td>
+    </tr>`).join("") || '<tr><td colspan="9" class="empty">该时间范围内暂无命中流水</td></tr>';
+  document.getElementById("total").textContent = r.total;
+  document.getElementById("page-info").textContent = `第 ${r.page} 页 / 共 ${Math.max(1, Math.ceil(r.total / PAGE_SIZE))} 页`;
+  document.getElementById("prev").disabled = page <= 1;
+  document.getElementById("next").disabled = page * PAGE_SIZE >= r.total;
+}
+
+function applyFilters() { page = 1; load(); }
+
+function resetFilters() {
+  ["f-type", "f-action", "f-entry", "f-subject", "f-start", "f-end"].forEach(id => {
+    document.getElementById(id).value = "";
+  });
+  applyFilters();
+}
+
+function detail(i) {
+  const h = rows[i];
+  if (!h) return;
+  UI.modal("命中流水详情（只读）", `
+    <div class="grid cols-2">
+      <div class="stat"><div class="label">命中时间</div><div class="mono">${UI.fmtTime(h.ts)}</div></div>
+      <div class="stat"><div class="label">流水 ID</div><div class="mono" style="font-size:12px">${UI.esc(h.id)}</div></div>
+    </div>
+    <div class="field"><label>命中名单</label><div>${typeBadge(h.list_type)} ${UI.actionBadge(h.action)}
+      <span class="mono">${UI.esc(h.entry_field)}=${UI.esc(h.entry_value)}</span></div></div>
+    <div class="field"><label>命中原因</label><div>${UI.esc(h.entry_reason || "-")}</div></div>
+    <div class="field"><label>事件主体</label><div class="mono">${UI.esc(subjectText(h.subject))}</div></div>
+    <div class="field"><label>相关风险分</label><div><b>${h.risk_score}</b></div></div>
+    <div class="field"><label>命中事件概要</label>
+      <pre class="json-view">${UI.esc(UI.jsonPretty(h.event_summary || {}))}</pre></div>`);
+}
+
+async function loadStats() {
+  const r = await API.get("/api/list_hits/stats");
+  const s = r.stats;
+  document.getElementById("hit-stats").innerHTML = `
+    <div class="grid cols-4">
+      <div class="stat"><div class="label">今日命中</div><div class="value primary">${s.today}</div></div>
+      <div class="stat"><div class="label">拒绝 / 放行 / 标记</div><div class="value" style="font-size:20px">
+        <span class="value danger" style="font-size:20px">${s.by_action.reject}</span> /
+        <span class="value success" style="font-size:20px">${s.by_action.pass}</span> /
+        <span class="value warning" style="font-size:20px">${s.by_action.mark}</span></div></div>
+      <div class="stat"><div class="label">黑名单命中</div><div class="value danger">${s.by_type.black}</div></div>
+      <div class="stat"><div class="label">白名单命中</div><div class="value success">${s.by_type.white}</div></div>
+    </div>`;
+}
+
+boot("名单命中流水", () => {
+  const page = document.getElementById("page");
+  page.innerHTML = `
+    <div id="hit-stats"></div>
+    <div class="card">
+      <div class="card-head"><h3>🧾 名单命中流水</h3></div>
+      <div class="sub">每一次名单命中的完整记录：事件主体、命中条目、处置结果与风险分。流水为只读历史数据，由系统自动记录，不支持修改或删除；单次查询最多回溯 31 天。</div>
+      <div class="flex mb" style="flex-wrap:wrap">
+        <div class="field" style="margin:0;width:110px"><select id="f-type">
+          <option value="">全部类型</option><option value="black">黑名单</option><option value="white">白名单</option>
+        </select></div>
+        <div class="field" style="margin:0;width:110px"><select id="f-action">
+          <option value="">全部处置</option><option value="reject">拒绝</option>
+          <option value="pass">放行</option><option value="mark">标记</option>
+        </select></div>
+        <div class="field" style="margin:0;width:170px"><input id="f-entry" placeholder="条目 ID"></div>
+        <div class="field" style="margin:0;width:170px"><input id="f-subject" placeholder="主体（IP/用户/设备）"></div>
+        <div class="field" style="margin:0"><input id="f-start" type="datetime-local" step="1" title="开始时间"></div>
+        <div class="field" style="margin:0"><input id="f-end" type="datetime-local" step="1" title="结束时间"></div>
+        <button class="btn sm primary" onclick="applyFilters()">查询</button>
+        <button class="btn sm" onclick="resetFilters()">重置</button>
+        <span class="muted" style="margin-left:auto">共 <b id="total">0</b> 条</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>命中时间</th><th>名单类型</th><th>命中条目</th><th>事件主体</th><th>处置</th><th>风险分</th><th>事件类型</th><th>事件 ID</th><th></th></tr></thead>
+          <tbody id="hit-body"></tbody>
+        </table>
+      </div>
+      <div class="flex mt" style="justify-content:flex-end">
+        <button class="btn sm" id="prev" onclick="page--;load()">上一页</button>
+        <span class="muted" id="page-info"></span>
+        <button class="btn sm" id="next" onclick="page++;load()">下一页</button>
+      </div>
+    </div>`;
+  // 支持从名单管理页带 entry_id 跳转
+  const preset = new URLSearchParams(location.search).get("entry_id");
+  if (preset) document.getElementById("f-entry").value = preset;
+  loadStats();
+  load();
+});
+</script>
+</body>
+</html>

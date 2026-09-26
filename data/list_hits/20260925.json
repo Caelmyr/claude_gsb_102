@@ -1,0 +1,278 @@
+{
+  "hits": [
+    {
+      "id": "hit_1790390003694_3219b52653",
+      "ts": 1790390003.6940389,
+      "list_type": "black",
+      "entry_id": "lst_1790389971321_3f73fbe28b",
+      "entry_field": "ip",
+      "entry_value": "45.155.23.9",
+      "entry_reason": "已知撞库源 IP",
+      "subject": {
+        "ip": "45.155.23.9",
+        "user_id": "u8888",
+        "device_id": "web"
+      },
+      "action": "reject",
+      "risk_score": 95,
+      "event_summary": {
+        "id": "ev_1790390003694",
+        "type": "login",
+        "ts": 1790390003.6940389,
+        "ip": "45.155.23.9",
+        "user_id": "u8888",
+        "device_id": "web"
+      }
+    },
+    {
+      "id": "hit_1790390003695_255e198c2a",
+      "ts": 1790390003.6940389,
+      "list_type": "black",
+      "entry_id": "lst_1790389971321_3f73fbe28b",
+      "entry_field": "ip",
+      "entry_value": "45.155.23.9",
+      "entry_reason": "已知撞库源 IP",
+      "subject": {
+        "ip": "45.155.23.9",
+        "user_id": "u8888",
+        "device_id": "web"
+      },
+      "action": "reject",
+      "risk_score": 95,
+      "event_summary": {
+        "id": "ev_1790390003694",
+        "type": "login",
+        "ts": 1790390003.6940389,
+        "ip": "45.155.23.9",
+        "user_id": "u8888",
+        "device_id": "web"
+      }
+    },
+    {
+      "id": "hit_1790390003723_02c36c6976",
+      "ts": 1790390003.7202673,
+      "list_type": "white",
+      "entry_id": "lst_1790389971325_454cc73ef2",
+      "entry_field": "ip",
+      "entry_value": "10.0.0.8",
+      "entry_reason": "内部办公网出口",
+      "subject": {
+        "ip": "10.0.0.8",
+        "user_id": "u9999"
+      },
+      "action": "pass",
+      "risk_score": 95,
+      "event_summary": {
+        "id": "ev_1790390003720",
+        "type": "transfer",
+        "ts": 1790390003.7202673,
+        "ip": "10.0.0.8",
+        "user_id": "u9999",
+        "amount": 600000
+      }
+    },
+    {
+      "id": "hit_1790390003726_361dc0cf9b",
+      "ts": 1790390003.7202673,
+      "list_type": "white",
+      "entry_id": "lst_1790389971325_454cc73ef2",
+      "entry_field": "ip",
+      "entry_value": "10.0.0.8",
+      "entry_reason": "内部办公网出口",
+      "subject": {
+        "ip": "10.0.0.8",
+        "user_id": "u9999"
+      },
+      "action": "pass",
+      "risk_score": 95,
+      "event_summary": {
+        "id": "ev_1790390003720",
+        "type": "transfer",
+        "ts": 1790390003.7202673,
+        "ip": "10.0.0.8",
+        "user_id": "u9999",
+        "amount": 600000
+      }
+    },
+    {
+      "id": "hit_1790390003747_45def51f38",
+      "ts": 1790390003.747007,
+      "list_type": "black",
+      "entry_id": "lst_1790389971324_2c947a51b5",
+      "entry_field": "ip",
+      "entry_value": "203.0.113.66",
+      "entry_reason": "可疑代理出口",
+      "subject": {
+        "ip": "203.0.113.66",
+        "user_id": "u7777"
+      },
+      "action": "mark",
+      "risk_score": 0,
+      "event_summary": {
+        "id": "ev_1790390003747",
+        "type": "login",
+        "ts": 1790390003.747007,
+        "ip": "203.0.113.66",
+        "user_id": "u7777"
+      }
+    },
+    {
+      "id": "hit_1790390003748_eeb02eeea4",
+      "ts": 1790390003.747007,
+      "list_type": "black",
+      "entry_id": "lst_1790389971324_2c947a51b5",
+      "entry_field": "ip",
+      "entry_value": "203.0.113.66",
+      "entry_reason": "可疑代理出口",
+      "subject": {
+        "ip": "203.0.113.66",
+        "user_id": "u7777"
+      },
+      "action": "mark",
+      "risk_score": 0,
+      "event_summary": {
+        "id": "ev_1790390003747",
+        "type": "login",
+        "ts": 1790390003.747007,
+        "ip": "203.0.113.66",
+        "user_id": "u7777"
+      }
+    },
+    {
+      "id": "hit_1790390053068_1153944777",
+      "ts": 1790390053.06842,
+      "list_type": "black",
+      "entry_id": "lst_1790390052978_0078bce20a",
+      "entry_field": "device_id",
+      "entry_value": "emu-001",
+      "entry_reason": "模拟器设备",
+      "subject": {
+        "ip": "8.8.8.8",
+        "user_id": "u5555",
+        "device_id": "emu-001"
+      },
+      "action": "reject",
+      "risk_score": 85,
+      "event_summary": {
+        "id": "ev_1790390053068",
+        "type": "login",
+        "ts": 1790390053.06842,
+        "ip": "8.8.8.8",
+        "user_id": "u5555",
+        "device_id": "emu-001"
+      }
+    },
+    {
+      "id": "hit_1790390053070_1056cd8941",
+      "ts": 1790390053.06842,
+      "list_type": "black",
+      "entry_id": "lst_1790390052978_0078bce20a",
+      "entry_field": "device_id",
+      "entry_value": "emu-001",
+      "entry_reason": "模拟器设备",
+      "subject": {
+        "ip": "8.8.8.8",
+        "user_id": "u5555",
+        "device_id": "emu-001"
+      },
+      "action": "reject",
+      "risk_score": 85,
+      "event_summary": {
+        "id": "ev_1790390053068",
+        "type": "login",
+        "ts": 1790390053.06842,
+        "ip": "8.8.8.8",
+        "user_id": "u5555",
+        "device_id": "emu-001"
+      }
+    },
+    {
+      "id": "hit_1790390087860_0412c2b9da",
+      "ts": 1790390087.8603144,
+      "list_type": "black",
+      "entry_id": "lst_1790389971321_3f73fbe28b",
+      "entry_field": "ip",
+      "entry_value": "45.155.23.9",
+      "entry_reason": "已知撞库源 IP",
+      "subject": {
+        "ip": "45.155.23.9",
+        "user_id": "u8888"
+      },
+      "action": "reject",
+      "risk_score": 95,
+      "event_summary": {
+        "id": "ev_1790390087860",
+        "type": "login",
+        "ts": 1790390087.8603144,
+        "ip": "45.155.23.9",
+        "user_id": "u8888"
+      }
+    },
+    {
+      "id": "hit_1790390087862_5418f9fed5",
+      "ts": 1790390087.8603144,
+      "list_type": "black",
+      "entry_id": "lst_1790389971321_3f73fbe28b",
+      "entry_field": "ip",
+      "entry_value": "45.155.23.9",
+      "entry_reason": "已知撞库源 IP",
+      "subject": {
+        "ip": "45.155.23.9",
+        "user_id": "u8888"
+      },
+      "action": "reject",
+      "risk_score": 95,
+      "event_summary": {
+        "id": "ev_1790390087860",
+        "type": "login",
+        "ts": 1790390087.8603144,
+        "ip": "45.155.23.9",
+        "user_id": "u8888"
+      }
+    },
+    {
+      "id": "hit_1790390139222_215edb2517",
+      "ts": 1790390139.2223368,
+      "list_type": "black",
+      "entry_id": "lst_1790389971321_3f73fbe28b",
+      "entry_field": "ip",
+      "entry_value": "45.155.23.9",
+      "entry_reason": "已知撞库源 IP",
+      "subject": {
+        "ip": "45.155.23.9",
+        "user_id": "u8888"
+      },
+      "action": "reject",
+      "risk_score": 95,
+      "event_summary": {
+        "id": "ev_1790390139222",
+        "type": "login",
+        "ts": 1790390139.2223368,
+        "ip": "45.155.23.9",
+        "user_id": "u8888"
+      }
+    },
+    {
+      "id": "hit_1790390139226_8c577d493d",
+      "ts": 1790390139.2223368,
+      "list_type": "black",
+      "entry_id": "lst_1790389971321_3f73fbe28b",
+      "entry_field": "ip",
+      "entry_value": "45.155.23.9",
+      "entry_reason": "已知撞库源 IP",
+      "subject": {
+        "ip": "45.155.23.9",
+        "user_id": "u8888"
+      },
+      "action": "reject",
+      "risk_score": 95,
+      "event_summary": {
+        "id": "ev_1790390139222",
+        "type": "login",
+        "ts": 1790390139.2223368,
+        "ip": "45.155.23.9",
+        "user_id": "u8888"
+      }
+    }
+  ]
+}

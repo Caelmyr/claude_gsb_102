@@ -23,10 +23,13 @@ FLOWS_DIR = os.path.join(DATA_DIR, "flows")        # 决策流
 DICT_DIR = os.path.join(DATA_DIR, "dict")          # 数据字典
 SETTINGS_DIR = os.path.join(DATA_DIR, "settings")  # 系统设置
 WINDOWS_DIR = os.path.join(DATA_DIR, "windows")    # 滑动窗口状态（可选持久化快照）
+LISTS_DIR = os.path.join(DATA_DIR, "lists")        # 黑白名单
+LIST_HITS_DIR = os.path.join(DATA_DIR, "list_hits")  # 名单命中流水：按天分片
 
 USERS_FILE = os.path.join(USERS_DIR, "users.json")
 SETTINGS_FILE = os.path.join(SETTINGS_DIR, "system.json")
 DICT_FILE = os.path.join(DICT_DIR, "dict.json")
+LISTS_FILE = os.path.join(LISTS_DIR, "lists.json")
 
 # 服务配置
 API_HOST = os.environ.get("RISK_HOST", "0.0.0.0")
@@ -53,6 +56,10 @@ DEFAULT_SETTINGS = {
     },
     "event_types": ["login", "register", "order", "payment", "transfer", "withdraw", "sms", "api"],
     "dict_categories": ["事件类型", "风险等级", "动作类型", "渠道", "设备类型", "IP 段"],
+    "list": {
+        "max_hit_keep": 20000,      # 内存中保留的名单命中流水条数（统计口径）
+        "hit_query_max_days": 31,   # 命中流水单次查询最大回溯天数
+    },
 }
 
 # 动作类型
@@ -68,7 +75,8 @@ AGG_TYPES = ["count", "sum", "avg", "distinct_count", "max", "min"]
 def ensure_dirs():
     """确保所有数据目录存在。"""
     for d in (RULES_DIR, VERSIONS_DIR, EVENTS_DIR, ALERTS_DIR, USERS_DIR,
-              FLOWS_DIR, DICT_DIR, SETTINGS_DIR, WINDOWS_DIR):
+              FLOWS_DIR, DICT_DIR, SETTINGS_DIR, WINDOWS_DIR,
+              LISTS_DIR, LIST_HITS_DIR):
         os.makedirs(d, exist_ok=True)
     if not os.path.exists(SETTINGS_FILE):
         from backend.storage import atomic_write_json

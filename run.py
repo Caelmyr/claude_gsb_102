@@ -23,6 +23,8 @@ PAGES = [
     ("flows.html", "决策流设计"),
     ("events.html", "实时事件流"),
     ("alerts.html", "告警列表"),
+    ("lists.html", "名单管理"),
+    ("list_hits.html", "名单命中流水"),
     ("stats.html", "统计报表"),
     ("users.html", "用户管理"),
     ("versions.html", "规则版本管理"),

@@ -22,11 +22,12 @@ from backend.engine.window import SlidingWindowAggregator
 from backend.engine.alert import AlertAggregator
 from backend.engine.rule_parser import _get_field
 from backend.event_store import EventStore
+from backend.list_store import entry_action
 from backend import config
 
 
 class RiskEngine:
-    def __init__(self, settings=None):
+    def __init__(self, settings=None, list_store=None, list_hit_store=None):
         settings = settings or {}
         eng = settings.get("engine", {})
         mode = eng.get("mode", "rete")
@@ -52,6 +53,10 @@ class RiskEngine:
             max_alert_keep=alert_keep,
         )
         self.events = EventStore()
+
+        # 名单匹配与命中流水（可选注入；None 时跳过名单链路）
+        self.lists = list_store
+        self.list_hits = list_hit_store
 
         self._listeners = set()
         self._listener_lock = threading.Lock()
@@ -115,6 +120,35 @@ class RiskEngine:
         return best_type, max_score
 
     # ------------------------------------------------------------------
+    # 名单处置合成
+    # ------------------------------------------------------------------
+    def _list_decision(self, hits):
+        """汇总名单命中条目的处置，返回 (action, score)。
+
+        优先级：黑名单 reject > 白名单 pass > mark（仅标记）；
+        score 取所有 reject 条目的最高风险分（供最终风险分合成）。
+        """
+        rank = {"reject": 2, "pass": 1, "mark": 0}
+        best = None
+        score = 0
+        for e in hits:
+            a = entry_action(e)
+            if a == "reject":
+                score = max(score, int(e.get("risk_score", 80)))
+            if best is None or rank[a] > rank[best]:
+                best = a
+        return best, score
+
+    def _match_lists(self, event):
+        """匹配事件命中的名单条目（无名单存储或异常时返回空列表）。"""
+        if self.lists is None:
+            return []
+        try:
+            return self.lists.match(event)
+        except Exception:
+            return []
+
+    # ------------------------------------------------------------------
     # 主入口
     # ------------------------------------------------------------------
     def process_event(self, event):
@@ -165,6 +199,15 @@ class RiskEngine:
         fired.sort(key=prio_key)
         action, max_score = self._decide(fired)
 
+        # 4.5) 名单匹配与处置合成：黑名单 reject > 白名单 pass > 规则决策；mark 仅记录
+        list_hits = self._match_lists(event)
+        list_action, list_score = self._list_decision(list_hits)
+        if list_action == "reject":
+            action = "reject"
+            max_score = max(max_score, list_score)
+        elif list_action == "pass":
+            action = "pass"
+
         # 5) 告警聚合去重
         alert_results = []
         for rule in fired:
@@ -211,6 +254,14 @@ class RiskEngine:
             m["rejected"] += 1 if action == "reject" else 0
             m["alerted"] += len(alert_results)
 
+        # 6.5) 名单命中流水：每条命中条目记录一条只读流水（含事件概要与风险分）
+        if list_hits and self.list_hits is not None:
+            for e in list_hits:
+                try:
+                    self.list_hits.record(e, event, entry_action(e), max_score, ts=ts)
+                except Exception:
+                    pass
+
         display_action = action
         if action == "reject":
             display_action = "review"
@@ -219,6 +270,11 @@ class RiskEngine:
         elif action == "alert":
             display_action = "pass"
         else:
+            display_action = "pass"
+        # 名单处置优先于规则决策展示：黑名单拒绝 / 白名单放行
+        if list_action == "reject":
+            display_action = "reject"
+        elif list_action == "pass":
             display_action = "pass"
         name_map = {r.id: r.description for r in fired}
         reason_map = {r.id: r.name for r in fired}
@@ -242,6 +298,14 @@ class RiskEngine:
             "action": display_action,
             "risk_score": max_score,
             "fired_rules": [_detail(r) for r in fired],
+            "list_hits": [{
+                "entry_id": e.get("id"),
+                "list_type": e.get("list_type"),
+                "field": e.get("field"),
+                "value": e.get("value"),
+                "action": entry_action(e),
+                "reason": e.get("reason", ""),
+            } for e in list_hits],
             "alerts": alert_results,
             "elapsed_us": elapsed_us,
             "engine_version": snapshot.version,
@@ -288,6 +352,15 @@ class RiskEngine:
         fired.sort(key=prio_key)
         action, max_score = self._decide(fired)
 
+        # 名单匹配（dry-run 只读：参与决策展示但不记录命中流水）
+        list_hits = self._match_lists(event)
+        list_action, list_score = self._list_decision(list_hits)
+        if list_action == "reject":
+            action = "reject"
+            max_score = max(max_score, list_score)
+        elif list_action == "pass":
+            action = "pass"
+
         def _dry_detail(r):
             return {
                 "rule_id": r.id,
@@ -303,6 +376,14 @@ class RiskEngine:
             "action": action,
             "risk_score": max_score,
             "fired_rules": [_dry_detail(r) for r in fired],
+            "list_hits": [{
+                "entry_id": e.get("id"),
+                "list_type": e.get("list_type"),
+                "field": e.get("field"),
+                "value": e.get("value"),
+                "action": entry_action(e),
+                "reason": e.get("reason", ""),
+            } for e in list_hits],
             "elapsed_us": int((time.perf_counter() - start) * 1e6),
             "engine_version": snapshot.version,
         }

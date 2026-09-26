@@ -1,0 +1,74 @@
+{
+  "entries": [
+    {
+      "list_type": "black",
+      "field": "ip",
+      "value": "45.155.23.9",
+      "action": "reject",
+      "risk_score": 95,
+      "reason": "已知撞库源 IP",
+      "remark": "威胁情报同步",
+      "id": "lst_1790389971321_3f73fbe28b",
+      "enabled": true,
+      "created_by": "system",
+      "created_at": 1790389971,
+      "updated_at": 1790389971
+    },
+    {
+      "list_type": "black",
+      "field": "user_id",
+      "value": "u66666",
+      "action": "reject",
+      "risk_score": 90,
+      "reason": "历史欺诈账号",
+      "remark": "人工录入",
+      "id": "lst_1790389971323_983bdfb8d0",
+      "enabled": true,
+      "created_by": "system",
+      "created_at": 1790389971,
+      "updated_at": 1790389971
+    },
+    {
+      "list_type": "black",
+      "field": "ip",
+      "value": "203.0.113.66",
+      "action": "mark",
+      "risk_score": 60,
+      "reason": "可疑代理出口",
+      "remark": "仅标记观察，不干预处置",
+      "id": "lst_1790389971324_2c947a51b5",
+      "enabled": true,
+      "created_by": "system",
+      "created_at": 1790389971,
+      "updated_at": 1790389971
+    },
+    {
+      "list_type": "white",
+      "field": "ip",
+      "value": "10.0.0.8",
+      "action": "pass",
+      "risk_score": 0,
+      "reason": "内部办公网出口",
+      "remark": "信任来源",
+      "id": "lst_1790389971325_454cc73ef2",
+      "enabled": true,
+      "created_by": "system",
+      "created_at": 1790389971,
+      "updated_at": 1790389971
+    },
+    {
+      "list_type": "white",
+      "field": "user_id",
+      "value": "u10001",
+      "action": "pass",
+      "risk_score": 0,
+      "reason": "内部测试账号",
+      "remark": "压测专用",
+      "id": "lst_1790389971326_0b53c43c0d",
+      "enabled": true,
+      "created_by": "system",
+      "created_at": 1790389971,
+      "updated_at": 1790389971
+    }
+  ]
+}
