@@ -22,6 +22,8 @@ from backend.engine.window import SlidingWindowAggregator
 from backend.engine.alert import AlertAggregator
 from backend.engine.rule_parser import _get_field
 from backend.event_store import EventStore
+from backend.list_store import ListStore
+from backend.list_hit_store import ListHitStore
 from backend import config
 
 
@@ -52,6 +54,8 @@ class RiskEngine:
             max_alert_keep=alert_keep,
         )
         self.events = EventStore()
+        self.lists = ListStore()
+        self.list_hits = ListHitStore()
 
         self._listeners = set()
         self._listener_lock = threading.Lock()
@@ -59,7 +63,7 @@ class RiskEngine:
 
         # 统计计数器与分钟级时间序列（供 ECharts 命中率/拒绝率）
         self._counters = {"total": 0, "matched": 0, "rejected": 0, "alerted": 0,
-                          "risk_score_sum": 0.0, "elapsed_us_sum": 0.0}
+                          "list_hits": 0, "risk_score_sum": 0.0, "elapsed_us_sum": 0.0}
         self._minute_series = {}   # minute_ts -> {total, matched, rejected, alerted}
 
     # ------------------------------------------------------------------
@@ -134,6 +138,24 @@ class RiskEngine:
             value = _get_field(event, value_field) if value_field else None
             self.window.add(key, value=value, ts=ts)
 
+        # 1.5) 名单匹配：每命中一个名单条目记录一条流水（只读历史）
+        list_records = []
+        for entry in self.lists.match(event):
+            disposition = entry.get("action") or \
+                ("reject" if entry.get("list_type") == "black" else "pass")
+            rec = self.list_hits.record(entry, event, disposition, ts=ts)
+            list_records.append(rec)
+
+        # 名单处置优先级：白名单放行 > 黑名单拒绝 > 标记（仅记录，不影响决策）
+        list_action = None
+        list_score = 0
+        if any(r["disposition"] == "pass" for r in list_records):
+            list_action = "pass"
+        elif any(r["disposition"] == "reject" for r in list_records):
+            list_action = "reject"
+            list_score = max(r["risk_score"] for r in list_records
+                             if r["disposition"] == "reject")
+
         # 2) alpha 匹配
         candidates = snapshot.matcher.match(event)
 
@@ -165,26 +187,27 @@ class RiskEngine:
         fired.sort(key=prio_key)
         action, max_score = self._decide(fired)
 
-        # 5) 告警聚合去重
+        # 5) 告警聚合去重（白名单放行的事件不再产生告警）
         alert_results = []
-        for rule in fired:
-            if rule.action.get("type") in ("reject", "review", "alert"):
-                alert, created = self.alerts.process(rule, event, ts=ts)
-                subject = {}
-                for f in rule.dedup_fields:
-                    subject[f] = event.get(f)
-                if "ip" not in subject:
-                    subject["ip"] = event.get("ip")
-                if "user_id" not in subject:
-                    subject["user_id"] = event.get("user_id")
-                alert_results.append({
-                    "alert_id": alert["id"],
-                    "rule_id": rule.id,
-                    "created": created,
-                    "count": alert.get("count", 1),
-                    "level": alert.get("level"),
-                    "subject": subject,
-                })
+        if list_action != "pass":
+            for rule in fired:
+                if rule.action.get("type") in ("reject", "review", "alert"):
+                    alert, created = self.alerts.process(rule, event, ts=ts)
+                    subject = {}
+                    for f in rule.dedup_fields:
+                        subject[f] = event.get(f)
+                    if "ip" not in subject:
+                        subject["ip"] = event.get("ip")
+                    if "user_id" not in subject:
+                        subject["user_id"] = event.get("user_id")
+                    alert_results.append({
+                        "alert_id": alert["id"],
+                        "rule_id": rule.id,
+                        "created": created,
+                        "count": alert.get("count", 1),
+                        "level": alert.get("level"),
+                        "subject": subject,
+                    })
 
         # 6) 持久化 + 统计
         self.events.add(event, ts=ts)
@@ -197,6 +220,7 @@ class RiskEngine:
             c["matched"] += 1 if matched else 0
             c["rejected"] += 1 if action == "reject" else 0
             c["alerted"] += len(alert_results)
+            c["list_hits"] += len(list_records)
             c["risk_score_sum"] += max_score
             c["elapsed_us_sum"] += elapsed_us
             shifted = ts - 8 * 3600
@@ -220,6 +244,13 @@ class RiskEngine:
             display_action = "pass"
         else:
             display_action = "pass"
+        # 名单处置覆盖最终动作：白名单直接放行，黑名单直接拒绝
+        if list_action == "pass":
+            display_action = "pass"
+            max_score = 0
+        elif list_action == "reject":
+            display_action = "reject"
+            max_score = max(max_score, list_score)
         name_map = {r.id: r.description for r in fired}
         reason_map = {r.id: r.name for r in fired}
         action_map = {r.id: r.action.get("type", "alert") for r in fired}
@@ -243,6 +274,7 @@ class RiskEngine:
             "risk_score": max_score,
             "fired_rules": [_detail(r) for r in fired],
             "alerts": alert_results,
+            "list_hits": list_records,
             "elapsed_us": elapsed_us,
             "engine_version": snapshot.version,
         }
@@ -288,6 +320,26 @@ class RiskEngine:
         fired.sort(key=prio_key)
         action, max_score = self._decide(fired)
 
+        # 名单匹配（只读，不记录流水）：白名单放行 > 黑名单拒绝
+        list_matched = []
+        for e in self.lists.match(event):
+            list_matched.append({
+                "list_type": e.get("list_type"),
+                "entry_id": e.get("id"),
+                "entry_value": e.get("value"),
+                "field": e.get("field"),
+                "disposition": e.get("action") or
+                ("reject" if e.get("list_type") == "black" else "pass"),
+                "risk_score": int(e.get("risk_score", 0) or 0),
+            })
+        if any(h["disposition"] == "pass" for h in list_matched):
+            action, max_score = "pass", 0
+        elif any(h["disposition"] == "reject" for h in list_matched):
+            action = "reject"
+            max_score = max(max_score,
+                            max(h["risk_score"] for h in list_matched
+                                if h["disposition"] == "reject"))
+
         def _dry_detail(r):
             return {
                 "rule_id": r.id,
@@ -303,6 +355,7 @@ class RiskEngine:
             "action": action,
             "risk_score": max_score,
             "fired_rules": [_dry_detail(r) for r in fired],
+            "list_hits": list_matched,
             "elapsed_us": int((time.perf_counter() - start) * 1e6),
             "engine_version": snapshot.version,
         }
@@ -378,6 +431,7 @@ class RiskEngine:
                 "matched": hit_n,
                 "rejected": reject_n,
                 "alerted": c["alerted"],
+                "list_hits": c["list_hits"],
                 "hit_rate": hit_rate,
                 "reject_rate": reject_rate,
                 "avg_risk_score": avg_score,
@@ -392,5 +446,5 @@ class RiskEngine:
     def reset_stats(self):
         with self._lock:
             self._counters = {"total": 0, "matched": 0, "rejected": 0, "alerted": 0,
-                              "risk_score_sum": 0.0, "elapsed_us_sum": 0.0}
+                              "list_hits": 0, "risk_score_sum": 0.0, "elapsed_us_sum": 0.0}
             self._minute_series = {}

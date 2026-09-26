@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>名单管理 · 风控引擎</title>
+<link rel="stylesheet" href="assets/css/style.css">
+<script src="assets/js/api.js"></script>
+</head>
+<body>
+<div id="app"></div>
+<script>
+let entries = [];
+let meta = { list_types: ["black", "white"], fields: [], dispositions: ["reject", "pass", "mark"] };
+
+const TYPE_LABEL = { black: "黑名单", white: "白名单" };
+const DISP_LABEL = { reject: "拒绝", pass: "放行", mark: "标记" };
+
+function typeBadge(t) {
+  return t === "black"
+    ? '<span class="badge danger">黑名单</span>'
+    : '<span class="badge success">白名单</span>';
+}
+function dispBadge(d) {
+  const map = { reject: "danger", pass: "success", mark: "warning" };
+  return `<span class="badge ${map[d] || "muted"}">${DISP_LABEL[d] || UI.esc(d)}</span>`;
+}
+
+async function load() {
+  const listType = document.getElementById("f-type").value;
+  const field = document.getElementById("f-field").value;
+  const keyword = document.getElementById("f-keyword").value.trim();
+  const q = new URLSearchParams();
+  if (listType) q.set("list_type", listType);
+  if (field) q.set("field", field);
+  if (keyword) q.set("keyword", keyword);
+  const r = await API.get("/api/lists?" + q.toString());
+  entries = r.entries;
+  document.getElementById("total").textContent = r.total;
+  document.getElementById("list-body").innerHTML = entries.map(e => `
+    <tr>
+      <td>${typeBadge(e.list_type)}</td>
+      <td class="mono">${UI.esc(e.field)}</td>
+      <td class="mono"><b>${UI.esc(e.value)}</b></td>
+      <td>${dispBadge(e.action)}</td>
+      <td class="num">${e.risk_score}</td>
+      <td>${UI.esc(e.remark || "")}</td>
+      <td>${e.enabled ? '<span class="badge success">启用</span>' : '<span class="badge muted">停用</span>'}</td>
+      <td class="mono">${UI.fmtTime(e.updated_at)}</td>
+      <td class="text-right">
+        <button class="btn sm" onclick="editEntry('${UI.esc(e.id)}')">编辑</button>
+        <button class="btn sm ${e.enabled ? "warning" : "success"}" onclick="toggleEntry('${UI.esc(e.id)}', ${e.enabled ? "false" : "true"})">${e.enabled ? "停用" : "启用"}</button>
+        <button class="btn sm danger" onclick="delEntry('${UI.esc(e.id)}')">删除</button>
+      </td>
+    </tr>`).join("") || '<tr><td colspan="9" class="muted" style="text-align:center">暂无名单条目</td></tr>';
+}
+
+async function loadMeta() {
+  const r = await API.get("/api/lists/meta");
+  meta = r;
+  const sel = document.getElementById("f-field");
+  sel.innerHTML = '<option value="">全部字段</option>' +
+    meta.fields.map(f => `<option value="${UI.esc(f)}">${UI.esc(f)}</option>`).join("");
+  const s = r.stats;
+  document.getElementById("list-stats").innerHTML = `
+    <div class="grid cols-4">
+      <div class="stat"><div class="label">条目总数</div><div class="value primary">${s.total}</div></div>
+      <div class="stat"><div class="label">黑名单</div><div class="value danger">${s.by_type.black || 0}</div></div>
+      <div class="stat"><div class="label">白名单</div><div class="value success">${s.by_type.white || 0}</div></div>
+      <div class="stat"><div class="label">启用中</div><div class="value">${s.enabled}</div></div>
+    </div>`;
+}
+
+function entryForm(e) {
+  const isEdit = !!e;
+  e = e || { list_type: "black", field: "ip", value: "", action: "reject", risk_score: 90, remark: "" };
+  return `
+    <div class="field"><label>名单类型</label>
+      <select id="ne-type" onchange="document.getElementById('ne-action').value = this.value === 'black' ? 'reject' : 'pass'">
+        <option value="black" ${e.list_type === "black" ? "selected" : ""}>黑名单</option>
+        <option value="white" ${e.list_type === "white" ? "selected" : ""}>白名单</option>
+      </select></div>
+    <div class="field"><label>匹配字段</label>
+      <select id="ne-field">${meta.fields.map(f => `<option value="${UI.esc(f)}" ${f === e.field ? "selected" : ""}>${UI.esc(f)}</option>`).join("")}</select></div>
+    <div class="field"><label>名单值</label><input id="ne-value" value="${UI.esc(e.value)}" placeholder="如 1.2.3.4 / u12345"></div>
+    <div class="field"><label>处置方式</label>
+      <select id="ne-action">
+        <option value="reject" ${e.action === "reject" ? "selected" : ""}>拒绝</option>
+        <option value="pass" ${e.action === "pass" ? "selected" : ""}>放行</option>
+        <option value="mark" ${e.action === "mark" ? "selected" : ""}>标记（仅记录流水）</option>
+      </select></div>
+    <div class="field"><label>风险分</label><input id="ne-score" type="number" value="${e.risk_score}"></div>
+    <div class="field"><label>备注</label><input id="ne-remark" value="${UI.esc(e.remark || "")}"></div>`;
+}
+
+function readForm() {
+  return {
+    list_type: document.getElementById("ne-type").value,
+    field: document.getElementById("ne-field").value,
+    value: document.getElementById("ne-value").value.trim(),
+    action: document.getElementById("ne-action").value,
+    risk_score: parseInt(document.getElementById("ne-score").value) || 0,
+    remark: document.getElementById("ne-remark").value,
+  };
+}
+
+function newEntry() {
+  UI.modal("新增名单条目", entryForm(null),
+    `<button class="btn" onclick="document.querySelector('#modal-mask').classList.remove('show')">取消</button>
+     <button class="btn primary" onclick="createEntry()">新增</button>`);
+}
+async function createEntry() {
+  try {
+    await API.post("/api/lists", readForm());
+    UI.toast("已新增", "ok");
+    document.querySelector("#modal-mask").classList.remove("show");
+    load(); loadMeta();
+  } catch (e) { UI.toast(e.message, "err"); }
+}
+
+function editEntry(id) {
+  const e = entries.find(x => x.id === id);
+  if (!e) return;
+  UI.modal("编辑名单条目", entryForm(e),
+    `<button class="btn" onclick="document.querySelector('#modal-mask').classList.remove('show')">取消</button>
+     <button class="btn primary" onclick="saveEntry('${UI.esc(id)}')">保存</button>`);
+}
+async function saveEntry(id) {
+  try {
+    await API.put("/api/lists/" + id, readForm());
+    UI.toast("已保存", "ok");
+    document.querySelector("#modal-mask").classList.remove("show");
+    load(); loadMeta();
+  } catch (e) { UI.toast(e.message, "err"); }
+}
+
+async function toggleEntry(id, enabled) {
+  await API.post("/api/lists/" + id + "/enable", { enabled });
+  UI.toast(enabled ? "已启用" : "已停用", "ok");
+  load(); loadMeta();
+}
+
+async function delEntry(id) {
+  if (!confirm("确认删除该名单条目？")) return;
+  await API.del("/api/lists/" + id);
+  UI.toast("已删除", "ok");
+  load(); loadMeta();
+}
+
+boot("名单管理", () => {
+  const page = document.getElementById("page");
+  page.innerHTML = `
+    <div id="list-stats"></div>
+    <div class="card">
+      <div class="card-head"><h3>📋 名单管理</h3>
+        <div class="flex">
+          <button class="btn sm primary" onclick="newEntry()">＋ 新增条目</button>
+        </div>
+      </div>
+      <div class="sub">事件命中黑名单默认拒绝、命中白名单默认放行；处置为「标记」时仅记录命中流水，不影响决策</div>
+      <div class="flex mb" style="flex-wrap:wrap">
+        <div class="field" style="margin:0;width:120px"><select id="f-type" onchange="load()">
+          <option value="">全部类型</option><option value="black">黑名单</option><option value="white">白名单</option>
+        </select></div>
+        <div class="field" style="margin:0;width:140px"><select id="f-field" onchange="load()"><option value="">全部字段</option></select></div>
+        <div class="field" style="margin:0;width:200px"><input id="f-keyword" placeholder="关键词（值/备注）"></div>
+        <button class="btn sm primary" onclick="load()">查询</button>
+        <span class="muted" style="margin-left:auto">共 <b id="total">0</b> 条</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>类型</th><th>字段</th><th>值</th><th>处置</th><th>风险分</th><th>备注</th><th>状态</th><th>更新时间</th><th></th></tr></thead>
+          <tbody id="list-body"></tbody>
+        </table>
+      </div>
+    </div>`;
+  loadMeta();
+  load();
+});
+</script>
+</body>
+</html>

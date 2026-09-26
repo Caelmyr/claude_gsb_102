@@ -23,10 +23,13 @@ FLOWS_DIR = os.path.join(DATA_DIR, "flows")        # 决策流
 DICT_DIR = os.path.join(DATA_DIR, "dict")          # 数据字典
 SETTINGS_DIR = os.path.join(DATA_DIR, "settings")  # 系统设置
 WINDOWS_DIR = os.path.join(DATA_DIR, "windows")    # 滑动窗口状态（可选持久化快照）
+LISTS_DIR = os.path.join(DATA_DIR, "lists")      # 黑白名单
+LIST_HITS_DIR = os.path.join(DATA_DIR, "list_hits")  # 名单命中流水：按天分片
 
 USERS_FILE = os.path.join(USERS_DIR, "users.json")
 SETTINGS_FILE = os.path.join(SETTINGS_DIR, "system.json")
 DICT_FILE = os.path.join(DICT_DIR, "dict.json")
+LISTS_FILE = os.path.join(LISTS_DIR, "lists.json")
 
 # 服务配置
 API_HOST = os.environ.get("RISK_HOST", "0.0.0.0")
@@ -58,6 +61,13 @@ DEFAULT_SETTINGS = {
 # 动作类型
 ACTION_TYPES = ["reject", "review", "pass", "alert"]
 
+# 名单类型与名单处置方式
+LIST_TYPES = ["black", "white"]
+LIST_DISPOSITIONS = ["reject", "pass", "mark"]   # 拒绝 / 放行 / 标记
+
+# 名单条目可匹配的事件字段
+LIST_FIELDS = ["ip", "user_id", "device_id", "country", "channel"]
+
 # 条件操作符
 CONDITION_OPS = ["==", "!=", ">", ">=", "<", "<=", "in", "not_in", "contains", "regex", "exists"]
 
@@ -68,7 +78,8 @@ AGG_TYPES = ["count", "sum", "avg", "distinct_count", "max", "min"]
 def ensure_dirs():
     """确保所有数据目录存在。"""
     for d in (RULES_DIR, VERSIONS_DIR, EVENTS_DIR, ALERTS_DIR, USERS_DIR,
-              FLOWS_DIR, DICT_DIR, SETTINGS_DIR, WINDOWS_DIR):
+              FLOWS_DIR, DICT_DIR, SETTINGS_DIR, WINDOWS_DIR,
+              LISTS_DIR, LIST_HITS_DIR):
         os.makedirs(d, exist_ok=True)
     if not os.path.exists(SETTINGS_FILE):
         from backend.storage import atomic_write_json

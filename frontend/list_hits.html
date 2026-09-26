@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>名单命中流水 · 风控引擎</title>
+<link rel="stylesheet" href="assets/css/style.css">
+<script src="assets/js/api.js"></script>
+</head>
+<body>
+<div id="app"></div>
+<script>
+let page = 1;
+const PAGE_SIZE = 20;
+let allEntries = [];
+
+const TYPE_LABEL = { black: "黑名单", white: "白名单" };
+const DISP_LABEL = { reject: "拒绝", pass: "放行", mark: "标记" };
+
+function typeBadge(t) {
+  return t === "black"
+    ? '<span class="badge danger">黑名单</span>'
+    : '<span class="badge success">白名单</span>';
+}
+function dispBadge(d) {
+  const map = { reject: "danger", pass: "success", mark: "warning" };
+  return `<span class="badge ${map[d] || "muted"}">${DISP_LABEL[d] || UI.esc(d)}</span>`;
+}
+function subjectText(h) {
+  const s = h.subject || {};
+  const parts = [];
+  if (s.ip) parts.push(s.ip);
+  if (s.user_id) parts.push(s.user_id);
+  if (s.device_id) parts.push(s.device_id);
+  return parts.join(" / ") || "-";
+}
+function toEpoch(localVal) {
+  if (!localVal) return null;
+  return new Date(localVal).getTime() / 1000;
+}
+function toLocalInput(ts) {
+  const d = new Date(ts * 1000);
+  const p = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function currentFilters() {
+  return {
+    list_type: document.getElementById("f-type").value,
+    entry_id: document.getElementById("f-entry").value,
+    disposition: document.getElementById("f-disp").value,
+    subject: document.getElementById("f-subject").value.trim(),
+    start: toEpoch(document.getElementById("f-start").value),
+    end: toEpoch(document.getElementById("f-end").value),
+  };
+}
+
+async function load() {
+  const f = currentFilters();
+  const q = new URLSearchParams({ page, page_size: PAGE_SIZE });
+  for (const [k, v] of Object.entries(f)) {
+    if (v !== null && v !== "" && v !== undefined) q.set(k, v);
+  }
+  const r = await API.get("/api/list-hits?" + q.toString());
+  document.getElementById("total").textContent = r.total;
+  document.getElementById("hit-body").innerHTML = r.hits.map(h => `
+    <tr>
+      <td class="mono">${UI.fmtTime(h.ts)}</td>
+      <td>${typeBadge(h.list_type)}</td>
+      <td class="mono">${UI.esc(h.field)} = <b>${UI.esc(h.entry_value)}</b></td>
+      <td class="mono">${UI.esc(subjectText(h))}</td>
+      <td>${dispBadge(h.disposition)}</td>
+      <td class="num">${h.risk_score}</td>
+      <td>${UI.esc(h.event_type || "-")}</td>
+      <td class="mono">${UI.esc(h.event_id || "-")}</td>
+      <td class="text-right"><button class="btn sm" onclick="detail('${UI.esc(h.id)}')">详情</button></td>
+    </tr>`).join("") || '<tr><td colspan="9" class="muted" style="text-align:center">该时间范围内暂无命中流水</td></tr>';
+  document.getElementById("page-info").textContent = `第 ${page} 页 / 共 ${Math.max(1, Math.ceil(r.total / PAGE_SIZE))} 页`;
+  document.getElementById("prev").disabled = page <= 1;
+  document.getElementById("next").disabled = page * PAGE_SIZE >= r.total;
+}
+
+async function loadStats() {
+  const f = currentFilters();
+  const q = new URLSearchParams();
+  if (f.start) q.set("start", f.start);
+  if (f.end) q.set("end", f.end);
+  const r = await API.get("/api/list-hits/stats?" + q.toString());
+  const s = r.stats;
+  document.getElementById("hit-stats").innerHTML = `
+    <div class="grid cols-4">
+      <div class="stat"><div class="label">命中总数</div><div class="value primary">${s.total}</div>
+        <div class="hint">黑名单 ${s.by_type.black || 0} · 白名单 ${s.by_type.white || 0}</div></div>
+      <div class="stat"><div class="label">拒绝</div><div class="value danger">${s.by_disposition.reject || 0}</div></div>
+      <div class="stat"><div class="label">放行</div><div class="value success">${s.by_disposition.pass || 0}</div></div>
+      <div class="stat"><div class="label">标记</div><div class="value warning">${s.by_disposition.mark || 0}</div></div>
+    </div>`;
+}
+
+function applyFilters() {
+  page = 1;
+  load();
+  loadStats();
+}
+
+async function loadEntries() {
+  const r = await API.get("/api/lists");
+  allEntries = r.entries;
+  const sel = document.getElementById("f-entry");
+  sel.innerHTML = '<option value="">全部条目</option>' + allEntries.map(e =>
+    `<option value="${UI.esc(e.id)}">${TYPE_LABEL[e.list_type] || e.list_type} · ${UI.esc(e.field)} = ${UI.esc(e.value)}</option>`
+  ).join("");
+}
+
+async function detail(id) {
+  UI.modal("命中流水详情", `<div id="detail-body">加载中…</div>`);
+  try {
+    const r = await API.get("/api/list-hits/" + id);
+    const h = r.hit;
+    document.getElementById("detail-body").innerHTML = `
+      <div class="grid cols-2" style="gap:10px;margin-bottom:12px">
+        <div><div class="muted">命中时间</div><div class="mono">${UI.fmtTime(h.ts)}</div></div>
+        <div><div class="muted">名单类型</div><div>${typeBadge(h.list_type)}</div></div>
+        <div><div class="muted">命中条目</div><div class="mono">${UI.esc(h.field)} = ${UI.esc(h.entry_value)}</div>
+          <div class="muted" style="font-size:11px">${UI.esc(h.entry_id)}</div></div>
+        <div><div class="muted">处置结果</div><div>${dispBadge(h.disposition)}　风险分 <b>${h.risk_score}</b></div></div>
+        <div><div class="muted">事件主体</div><div class="mono">${UI.esc(subjectText(h))}</div></div>
+        <div><div class="muted">命中值</div><div class="mono">${UI.esc(h.subject_value == null ? "-" : h.subject_value)}</div></div>
+      </div>
+      <div class="muted" style="margin-bottom:6px">命中事件概要（事件 ${UI.esc(h.event_id || "-")}）</div>
+      <pre class="json-view">${UI.esc(UI.jsonPretty(h.event_summary || {}))}</pre>`;
+  } catch (e) {
+    document.getElementById("detail-body").textContent = "未找到该流水";
+  }
+}
+
+boot("名单命中流水", () => {
+  const page = document.getElementById("page");
+  const now = Date.now() / 1000;
+  const dayStart = toLocalInput(now - (new Date().getHours() * 3600 + new Date().getMinutes() * 60 + new Date().getSeconds()));
+  page.innerHTML = `
+    <div id="hit-stats"></div>
+    <div class="card">
+      <div class="card-head"><h3>🧾 名单命中流水</h3></div>
+      <div class="sub">每一次名单命中的完整记录（只读历史数据）：事件主体、命中条目、命中时间、处置结果与风险分</div>
+      <div class="flex mb" style="flex-wrap:wrap">
+        <div class="field" style="margin:0;width:110px"><select id="f-type">
+          <option value="">全部类型</option><option value="black">黑名单</option><option value="white">白名单</option>
+        </select></div>
+        <div class="field" style="margin:0;width:220px"><select id="f-entry"><option value="">全部条目</option></select></div>
+        <div class="field" style="margin:0;width:100px"><select id="f-disp">
+          <option value="">全部处置</option><option value="reject">拒绝</option>
+          <option value="pass">放行</option><option value="mark">标记</option>
+        </select></div>
+        <div class="field" style="margin:0;width:160px"><input id="f-subject" placeholder="主体（IP/用户/设备）"></div>
+        <div class="field" style="margin:0"><input id="f-start" type="datetime-local" style="width:190px"></div>
+        <span class="muted">至</span>
+        <div class="field" style="margin:0"><input id="f-end" type="datetime-local" style="width:190px"></div>
+        <button class="btn sm primary" onclick="applyFilters()">查询</button>
+        <span class="muted" style="margin-left:auto">共 <b id="total">0</b> 条</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>命中时间</th><th>名单类型</th><th>命中条目</th><th>事件主体</th><th>处置</th><th>风险分</th><th>事件类型</th><th>事件 ID</th><th></th></tr></thead>
+          <tbody id="hit-body"></tbody>
+        </table>
+      </div>
+      <div class="flex mt" style="justify-content:flex-end">
+        <button class="btn sm" id="prev" onclick="page--;load()">上一页</button>
+        <span class="muted" id="page-info"></span>
+        <button class="btn sm" id="next" onclick="page++;load()">下一页</button>
+      </div>
+    </div>`;
+  document.getElementById("f-start").value = dayStart;
+  document.getElementById("f-end").value = toLocalInput(now);
+  loadEntries();
+  applyFilters();
+});
+</script>
+</body>
+</html>

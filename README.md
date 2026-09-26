@@ -1,18 +1,20 @@
 # 实时风控规则引擎与决策流 (Real-time Risk Control Rule Engine & Decision Flow)
 
-一个完整的实时风控规则引擎与决策流系统，支持可视化规则配置、决策流拖拽编排、WebSocket 实时事件流、滑动窗口聚合（短时高频计数）、规则动态热更新与版本回滚、告警聚合去重、统计报表与测试沙箱。
+一个完整的实时风控规则引擎与决策流系统，支持可视化规则配置、决策流拖拽编排、WebSocket 实时事件流、滑动窗口聚合（短时高频计数）、规则动态热更新与版本回滚、告警聚合去重、黑白名单管理与名单命中流水、统计报表与测试沙箱。
 
-规则、事件、告警全部以 JSON 文件存储（规则按版本、事件按小时分片），无外部数据库依赖，开箱即用。
+规则、事件、告警、名单与命中流水全部以 JSON 文件存储（规则按版本、事件按小时、告警与流水按天分片），无外部数据库依赖，开箱即用。
 
 ## 🚀 功能特性
 
-### 前端（10 个页面，原生 HTML/CSS/JS）
+### 前端（13 个页面，原生 HTML/CSS/JS）
 | 页面 | 路径 | 说明 |
 |------|------|------|
 | 登录 / 总览 | `index.html` | 登录认证、系统概览看板、关键指标 |
 | 规则配置 | `rules.html` | 规则 CRUD、CodeMirror JSON 编辑器、语法校验、启停 |
 | 决策流设计 | `flows.html` | 可视化拖拽节点（条件 / 动作 / 分支）编排决策流 |
 | 实时事件流 | `events.html` | WebSocket 滚动展示实时事件与命中告警 |
+| 名单管理 | `lists.html` | 黑白名单条目 CRUD、启停、处置方式（拒绝/放行/标记） |
+| 名单命中流水 | `list_hits.html` | 命中流水只读查询：按名单类型/条目/主体/时间范围筛选，查看事件概要 |
 | 告警列表 | `alerts.html` | 告警查询、去重计数、标记处理、导出（CSV/JSON） |
 | 统计报表 | `stats.html` | ECharts 图表：命中率、拒绝率、事件趋势、规则命中排行 |
 | 用户管理 | `users.html` | 用户 CRUD、角色（admin/analyst/viewer）、重置密码 |
@@ -27,6 +29,8 @@
 - **动态规则热更新**：不可变编译快照 + 单引用原子替换，更新/删除/启停/回滚全程不中断匹配
 - **版本回滚**：每次保存追加版本历史快照，回滚以更高版本号重新发布
 - **告警聚合去重**：规则 + 主体字段指纹哈希索引，时间窗内累加计数，避免告警风暴
+- **黑白名单**：条目级处置（拒绝/放行/标记），内存哈希索引 O(1) 匹配，白名单放行优先于黑名单拒绝
+- **名单命中流水**：每次名单命中完整记录（主体、条目、时间、处置、风险分、事件概要），按天分片、只读可查
 - **JSON 并发读写安全**：进程内 RLock + 跨进程 flock + 临时文件 + fsync + os.replace 原子替换
 - **事件分片存储**：按小时分片 JSON 文件，内存缓冲 + 后台线程异步刷盘
 - **WebSocket 实时推送**：命中事件与告警实时广播到前端
@@ -41,6 +45,8 @@ gsb3/
 │   ├── storage.py             # JSON 原子读写、文件锁(flock)、事件小时分片、ID 生成
 │   ├── auth.py                # 认证、SHA-256 加盐密码、角色鉴权装饰器、默认账号
 │   ├── event_store.py         # 事件存储：内存缓冲 + 后台刷盘线程
+│   ├── list_store.py          # 名单管理：条目 CRUD + 内存哈希索引匹配
+│   ├── list_hit_store.py      # 名单命中流水：按天分片追加 + 只读查询
 │   ├── flows.py               # 决策流编译与执行（条件/动作/分支）
 │   ├── settings_store.py      # 系统设置读写（深合并）
 │   ├── seed.py                # 样例数据初始化（10 条规则、字典、示例决策流，幂等）
@@ -57,14 +63,16 @@ gsb3/
 │       ├── rules.py           # 规则 CRUD、校验、版本、回滚
 │       ├── events.py          # 事件查询、摄取、模拟突发、存储统计
 │       ├── alerts.py          # 告警查询、标记、导出、统计
+│       ├── lists.py           # 名单管理：黑白名单条目 CRUD、启停
+│       ├── list_hits.py       # 名单命中流水：只读筛选查询、详情、统计
 │       ├── stats.py           # 统计报表（命中率/拒绝率/趋势）
 │       ├── flows.py           # 决策流 CRUD 与执行
 │       ├── sandbox.py         # dry-run、单规则/决策流测试、窗口预热
 │       ├── users.py           # 用户管理
 │       ├── settings.py        # 系统设置
 │       └── dict.py            # 数据字典
-├── frontend/                  # 11 个页面 + assets/css/style.css + assets/js/api.js
-├── data/                      # JSON 数据（运行时自动创建）：rules/versions/events/alerts/...
+├── frontend/                  # 13 个页面 + assets/css/style.css + assets/js/api.js
+├── data/                      # JSON 数据（运行时自动创建）：rules/versions/events/alerts/lists/list_hits/...
 ├── requirements.txt
 ├── run.py                     # 一键启动脚本
 └── README.md
@@ -118,6 +126,8 @@ python run.py
 - 规则：`GET/POST /api/rules`、`GET/PUT/DELETE /api/rules/<id>`、`POST /api/rules/validate`、`POST /api/rules/<id>/enable`、`GET /api/rules/<id>/versions`、`POST /api/rules/<id>/rollback`
 - 事件：`GET /api/events`、`POST /api/events/ingest`、`POST /api/events/simulate`、`GET /api/events/store_stats`
 - 告警：`GET /api/alerts`、`POST /api/alerts/mark`、`GET /api/alerts/export`、`GET /api/alerts/stats`
+- 名单：`GET/POST /api/lists`、`GET/PUT/DELETE /api/lists/<id>`、`POST /api/lists/<id>/enable`、`GET /api/lists/meta`
+- 名单命中流水（只读）：`GET /api/list-hits`、`GET /api/list-hits/<id>`、`GET /api/list-hits/stats`
 - 统计：`GET /api/stats`、`POST /api/stats/reset`
 - 决策流：`GET/POST /api/flows`、`GET/PUT/DELETE /api/flows/<id>`
 - 沙箱：`POST /api/sandbox/dry_run`、`/test_rule`、`/test_flow`、`/seed_window`

@@ -179,8 +179,30 @@ def seed_flow(flow_store):
     flow_store.save_flow(flow)
 
 
+def seed_lists(list_store):
+    """初始化示例黑白名单条目（幂等：已有条目时跳过）。"""
+    if list_store.list_entries():
+        return 0
+    samples = [
+        {"list_type": "black", "field": "ip", "value": "45.155.204.117",
+         "action": "reject", "risk_score": 95, "remark": "已知攻击源 IP"},
+        {"list_type": "black", "field": "device_id", "value": "dev_rooted_01",
+         "action": "reject", "risk_score": 88, "remark": "已 Root 的风险设备"},
+        {"list_type": "black", "field": "user_id", "value": "u66666",
+         "action": "mark", "risk_score": 60, "remark": "观察名单：仅标记不拦截"},
+        {"list_type": "white", "field": "ip", "value": "10.8.0.1",
+         "action": "pass", "risk_score": 0, "remark": "内部办公网出口"},
+        {"list_type": "white", "field": "user_id", "value": "u10086",
+         "action": "pass", "risk_score": 0, "remark": "内部测试账号"},
+    ]
+    for e in samples:
+        list_store.create_entry(e)
+    return len(samples)
+
+
 def seed_all(engine, flow_store):
     n_rules = seed_rules(engine.registry)
     seed_dict()
     seed_flow(flow_store)
-    return {"rules": n_rules}
+    n_lists = seed_lists(engine.lists)
+    return {"rules": n_rules, "lists": n_lists}

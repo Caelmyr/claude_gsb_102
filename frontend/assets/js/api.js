@@ -135,6 +135,8 @@ window.App = (function () {
     ["rules.html", "📜", "规则配置"],
     ["flows.html", "🔀", "决策流设计"],
     ["events.html", "⚡", "实时事件流"],
+    ["lists.html", "📋", "名单管理"],
+    ["list_hits.html", "🧾", "名单命中流水"],
     ["alerts.html", "🔔", "告警列表"],
     ["stats.html", "📈", "统计报表"],
     ["versions.html", "🕘", "规则版本管理"],
